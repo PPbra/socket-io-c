@@ -44,6 +44,16 @@ int main()
 	}
 
 	int nbytes;
+	printf("Nhap vao kich thuoc buffer:");
+	scanf("%d", &bufferLength);
+	getchar();
+	nbytes = write(sockfd, (void*)&bufferLength, sizeof(bufferLength));
+	if (nbytes < 0)
+	{
+		perror("Write error!");
+		return 1;
+	}
+	
 	char fileName[bufferLength];
 	while (1)
 	{
@@ -96,7 +106,7 @@ int main()
 			}
 			else
 			{
-			//Trường hợp file có kich thước lớn hơn buffer
+				//Trường hợp file có kich thước lớn hơn buffer
 
 				while (1)
 				{
