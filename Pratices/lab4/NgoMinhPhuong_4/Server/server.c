@@ -1,17 +1,17 @@
 // Họ và tên:Ngô Minh Phương
 // Mã sinh viên: 16021629
-// Chương trình Server thiế t lập và lắng nghe kết nối từ Client , nhận tên file từ Client , tìm file và gử i cho Client => tiếp tục lắng nghe kết nối tiếp
-#include<sys/socket.h>
-#include<sys/wait.h>
-#include<arpa/inet.h>
-#include<netinet/in.h>
-#include<unistd.h>
-#include<string.h>
-#include<ctype.h>
-#include<pthread.h>
-#include<errno.h>
-#include<stdlib.h>
-#include<stdio.h>
+// Chương trình Server thiế t lập và lắng nghe kết nối từ Client , nhận tên file từ Client , tìm file và gử i cho Client => hiển thị số file cliets đã download ,tiếp tục lắng nghe kết nối tiếp
+#include <sys/socket.h>
+#include <sys/wait.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <string.h>
+#include <ctype.h>
+#include <pthread.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 void *handleARequest(void *arg);
 int *connClientSocket;
@@ -61,7 +61,6 @@ int main()
 		perror("Listen loi!");
 	}
 
-
 	printf("Server dang nghe o cong %d\n", listenFort);
 
 	while (1)
@@ -79,8 +78,7 @@ int main()
 		printf("Thong tin Client: %s:%d\n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port));
 
 		pthread_t tid;
-        pthread_create(&tid, NULL, &handleARequest, (void *) connClientSocket);
-		
+		pthread_create(&tid, NULL, &handleARequest, (void *)connClientSocket);
 	}
 
 	close(listenfd);
@@ -91,56 +89,60 @@ int main()
 
 void *handleARequest(void *arg)
 {
-			int connClientSocket = *((int *) arg);
-			int nbytes;
-			int bufferLength = 1024;
-			free(arg);
-			pthread_detach(pthread_self());
-			nbytes = read(connClientSocket, &bufferLength, sizeof(bufferLength));
+	int connClientSocket = *((int *)arg);
+	int nbytes;
+	int bufferLength = 1024;
+	free(arg);
+	pthread_detach(pthread_self());
+	nbytes = read(connClientSocket, &bufferLength, sizeof(bufferLength));
 
-			if (nbytes < 0)
+	if (nbytes < 0)
+	{
+		perror("Doc loi! \n");
+		return NULL;
+	};
+
+	char buffer[bufferLength];
+	while (1)
+	{
+		nbytes = read(connClientSocket, buffer, sizeof(buffer));
+		if (nbytes < 0)
+		{
+			perror("Đọc bị lỗi!\n");
+			break;
+		}
+		else if (nbytes == 0)
+		{
+			break;
+		}
+		else
+		{
+
+			int fileSize = 0;
+			FILE *file, fileStat;
+			file = fopen(buffer, "rb");
+			printf("Ten file Client gui len la:%s\n", buffer);
+			//lay kich thuoc file
+			fseek(file, 0L, SEEK_END);
+			fileSize = ftell(file);
+			fseek(file, 0L, SEEK_SET);
+			printf("Kich thuoc cua file: %d \n", fileSize);
+			//gui kich thuoc file
+			write(connClientSocket, (void *)&fileSize, sizeof(int));
+			//gui file
+			bzero(buffer, sizeof(buffer));
+			while (!feof(file))
 			{
-				perror("Doc loi! \n");
-				return NULL;
-			};
-
-			char buffer[bufferLength];
-			while (1)
-			{
-				nbytes = read(connClientSocket, buffer, sizeof(buffer));
-				if (nbytes < 0)
-				{
-					perror("Đọc bị lỗi!\n");
-					break;
-				}
-				else if (nbytes == 0)
-				{
-					break;
-				}
-				else
-				{
-
-					int fileSize = 0;
-					FILE *file, fileStat;
-					file = fopen(buffer, "rb");
-					printf("Ten file Client gui len la:%s\n", buffer);
-					//lay kich thuoc file
-					fseek(file, 0L, SEEK_END);
-					fileSize = ftell(file);
-					fseek(file, 0L, SEEK_SET);
-					printf("Kich thuoc cua file: %d \n", fileSize);
-					//gui kich thuoc file
-					write(connClientSocket, (void *)&fileSize, sizeof(int));
-					//gui file
-					bzero(buffer, sizeof(buffer));
-					while (!feof(file))
-					{
-						int sizeRead = fread(buffer, 1, sizeof(buffer), file);
-						write(connClientSocket, buffer, sizeof(buffer));
-						bzero(buffer, sizeof(buffer));
-					}
-					printf("Gui file %s xong!\n", buffer);
-				}
+				int sizeRead = fread(buffer, 1, sizeof(buffer), file);
+				write(connClientSocket, buffer, sizeof(buffer));
+				bzero(buffer, sizeof(buffer));
 			}
+			printf("Gui file %s xong!\n", buffer);
+			pthread_mutex_lock(&access_point);
+			countFile++;
+			printf("Tổng file Clients đã download: %d\n", countFile);
+			pthread_mutex_unlock(&access_point);
+		}
+	}
 	return NULL;
 }
