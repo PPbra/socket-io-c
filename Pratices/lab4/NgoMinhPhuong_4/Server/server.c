@@ -1,20 +1,22 @@
 // Họ và tên:Ngô Minh Phương
 // Mã sinh viên: 16021629
 // Chương trình Server thiế t lập và lắng nghe kết nối từ Client , nhận tên file từ Client , tìm file và gử i cho Client => tiếp tục lắng nghe kết nối tiếp
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <unistd.h>
-#include <strings.h>
-#include <string.h>
-#include <stdio.h>
-#include <ctype.h>
-#include <sys/wait.h>
-#include <sys/types.h>
-#include <signal.h>
+#include<sys/socket.h>
+#include<sys/wait.h>
+#include<arpa/inet.h>
+#include<netinet/in.h>
+#include<unistd.h>
+#include<string.h>
+#include<ctype.h>
+#include<pthread.h>
+#include<errno.h>
+#include<stdlib.h>
+#include<stdio.h>
 
-void handleSigChild(int sig);
+void *handleARequest(void *arg);
 int *connClientSocket;
+int countFile = 0;
+pthread_mutex_t access_point = PTHREAD_MUTEX_INITIALIZER;
 
 int main()
 {
@@ -59,15 +61,12 @@ int main()
 		perror("Listen loi!");
 	}
 
-	signal(SIGCHLD, handleSigChild);
 
 	printf("Server dang nghe o cong %d\n", listenFort);
 
 	while (1)
 	{
 		unsigned int addrLength = sizeof(cliaddr);
-		int nbytes;
-		int bufferLength = 1024;
 		connClientSocket = malloc(sizeof(int));
 		*connClientSocket = accept(listenfd, (struct sockaddr *)&cliaddr, &addrLength);
 
@@ -78,15 +77,31 @@ int main()
 		}
 
 		printf("Thong tin Client: %s:%d\n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port));
-		if ((childId = fork()) == 0)
-		{
-			close(listenfd);
+
+		pthread_t tid;
+        pthread_create(&tid, NULL, &handleARequest, (void *) connClientSocket);
+		
+	}
+
+	close(listenfd);
+	printf("Dong ket noi!");
+
+	return 0;
+}
+
+void *handleARequest(void *arg)
+{
+			int connClientSocket = *((int *) arg);
+			int nbytes;
+			int bufferLength = 1024;
+			free(arg);
+			pthread_detach(pthread_self());
 			nbytes = read(connClientSocket, &bufferLength, sizeof(bufferLength));
 
 			if (nbytes < 0)
 			{
 				perror("Doc loi! \n");
-				continue;
+				return NULL;
 			};
 
 			char buffer[bufferLength];
@@ -100,7 +115,6 @@ int main()
 				}
 				else if (nbytes == 0)
 				{
-					printf("Client %s:%d đã đóng kết nối,tiếp tục lắng nghe taị cổng %d \n", inet_ntoa(cliaddr.sin_addr), ntohs(cliaddr.sin_port), listenFort);
 					break;
 				}
 				else
@@ -128,22 +142,5 @@ int main()
 					printf("Gui file %s xong!\n", buffer);
 				}
 			}
-
-			exit(0);
-		}
-	}
-
-	close(listenfd);
-	printf("Dong ket noi!");
-
-	return 0;
-}
-
-void handleSigChild(int sig)
-{
-	pid_t pid;
-	int status;
-	while ((pid = waitpid(-1, &status, WNOHANG)) > 0)
-		/* empty */;
-	return;
+	return NULL;
 }
