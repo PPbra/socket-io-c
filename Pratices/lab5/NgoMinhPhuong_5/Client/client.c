@@ -9,6 +9,7 @@
 #include <strings.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
 
 int main()
 {
@@ -58,63 +59,76 @@ int main()
 		}
 		else
 		{
+
+			char getBuffer[bufferLength];
+			bzero(getBuffer, bufferLength);
+
 			nbytes = write(sockfd, fileName, sizeof(fileName));
 			if (nbytes < 0)
 			{
 				perror("Write error!");
 				return 1;
 			}
-
-			int fileSize;
-			nbytes = read(sockfd, &fileSize, sizeof(fileSize));
-			if (nbytes < 0)
+			int message;
+			if (read(sockfd, &message, sizeof(message)))
 			{
-				perror("Read error!");
-				return 1;
-			}
-
-			printf("Dang download file ----> Kich thuoc file:%d bytes.......\n", fileSize);
-
-			FILE *file = fopen(fileName, "wb");
-
-			int getSize = 0;
-			char getBuffer[bufferLength];
-			bzero(getBuffer, bufferLength);
-
-			int sizePlus = fileSize % bufferLength;
-			//Trường hợp file có kich thước nhỏ hơn buffer
-			if (fileSize < bufferLength)
-			{
-				while (getSize < fileSize)
+				if (message == 1)
 				{
-					int current = read(sockfd, getBuffer, bufferLength);
-					fwrite(getBuffer, 1, fileSize, file);
-					printf("%d\n", current);
-					getSize += current;
-					bzero(getBuffer, bufferLength);
-				}
-			}
-			else
-			{
-				//Trường hợp file có kich thước lớn hơn buffer
-
-				while (1)
-				{
-					if (getSize < fileSize - bufferLength)
+					int fileSize;
+					nbytes = read(sockfd, &fileSize, sizeof(fileSize));
+					if (nbytes < 0)
 					{
-						int current = read(sockfd, getBuffer, bufferLength);
-						fwrite(getBuffer, 1, current, file);
-						getSize += current;
-						continue;
+						perror("Read error!");
+						return 1;
 					}
-					read(sockfd, getBuffer, bufferLength);
-					fwrite(getBuffer, 1, sizePlus, file);
-					bzero(getBuffer, bufferLength);
-					break;
+
+					printf("Dang download file ----> Kich thuoc file:%d bytes.......\n", fileSize);
+
+					FILE *file = fopen(fileName, "wb");
+					clock_t start_counter = clock();
+					int getSize = 0;
+					int sizePlus = fileSize % bufferLength;
+					//Trường hợp file có kich thước nhỏ hơn buffer
+					if (fileSize < bufferLength)
+					{
+						while (getSize < fileSize)
+						{
+							int current = read(sockfd, getBuffer, bufferLength);
+							fwrite(getBuffer, 1, fileSize, file);
+							printf("%d\n", current);
+							getSize += current;
+							bzero(getBuffer, bufferLength);
+						}
+					}
+					else
+					{
+						//Trường hợp file có kich thước lớn hơn buffer
+
+						while (1)
+						{
+							if (getSize < fileSize - bufferLength)
+							{
+								int current = read(sockfd, getBuffer, bufferLength);
+								fwrite(getBuffer, 1, current, file);
+								getSize += current;
+								continue;
+							}
+							read(sockfd, getBuffer, bufferLength);
+							fwrite(getBuffer, 1, sizePlus, file);
+							bzero(getBuffer, bufferLength);
+							break;
+						}
+					}
+					clock_t end_counter = clock();
+					printf("Download file %s hoan thanh trong:%f!\n", fileName, (double)(end_counter - start_counter) / CLOCKS_PER_SEC);
+					fclose(file);
+				}
+				else
+				{
+					printf("File khong ton tai!\n");
+					continue;
 				}
 			}
-			printf("Download file %s xong!\n", fileName);
-			fclose(file);
 		}
 	}
 	close(sockfd);

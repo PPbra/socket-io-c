@@ -19,25 +19,21 @@
 
 extern int errno;
 
-int errexit(const char *format, ...);
-int passiveTCP(const char *service, int qlen);
-
 //
 
-int handleARequest(int listenFileDesc);
+int handleARequest(int connectSocket);
 // int *connClientSocket;
-// int countFile = 0;
+int countFile = 0;
 // pthread_mutex_t access_point = PTHREAD_MUTEX_INITIALIZER;
 
 int main()
 {
-	char *service = "handleARequest";
 	struct sockaddr_in clientAddress, serverAddress;
 	int addressLenght, listenPort;
 	int masterSocket;
 	int listenQueue = 3;
 	fd_set readFileDesc, activeFileDesc;
-	int listenFileDesc;
+	int connectSocket;
 
 	masterSocket = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -72,10 +68,10 @@ int main()
 
 	if (listen(masterSocket, listenQueue) < 0)
 	{
-		perror("Listen loi!");
+		perror("Listen err!");
 	}
 
-	printf("Server dang nghe o cong %d\n", listenPort);
+	printf("Server on at port %d\n", listenPort);
 
 	FD_ZERO(&activeFileDesc);
 	FD_SET(masterSocket, &activeFileDesc);
@@ -85,7 +81,7 @@ int main()
 		memcpy(&readFileDesc, &activeFileDesc, sizeof(readFileDesc));
 		if (select(FD_SETSIZE, &readFileDesc, (fd_set *)0, (fd_set *)0, (struct timeval *)0) < 0)
 		{
-			perror("loi select!");
+			perror("Select err!");
 		}
 
 		if (FD_ISSET(masterSocket, &readFileDesc))
@@ -98,20 +94,20 @@ int main()
 
 			if (subSocket < 0)
 			{
-				perror("loi accept!");
+				perror("accept error!");
 			}
 
 			FD_SET(subSocket, &activeFileDesc);
 		}
 
-		for (listenFileDesc = 0; listenFileDesc < FD_SETSIZE; ++listenFileDesc)
+		for (connectSocket = 0; connectSocket < FD_SETSIZE; ++connectSocket)
 		{
-			if (listenFileDesc != masterSocket && FD_ISSET(listenFileDesc, &readFileDesc))
+			if (connectSocket != masterSocket && FD_ISSET(connectSocket, &readFileDesc))
 			{
-				if (handleARequest(listenFileDesc) == 0)
+				if (handleARequest(connectSocket) == 0)
 				{
-					(void)close(listenFileDesc);
-					FD_CLR(listenFileDesc, &activeFileDesc);
+					(void)close(connectSocket);
+					FD_CLR(connectSocket, &activeFileDesc);
 				}
 			}
 		}
@@ -119,7 +115,7 @@ int main()
 	return 0;
 }
 
-int handleARequest(int listenFileDesc)
+int handleARequest(int connectSocket)
 {
 
 	int nbytes;
@@ -127,36 +123,48 @@ int handleARequest(int listenFileDesc)
 
 	char buffer[bufferLength];
 
-	nbytes = read(listenFileDesc, buffer, sizeof(buffer));
+	nbytes = read(connectSocket, buffer, sizeof(buffer));
 	if (nbytes < 0)
 	{
-		perror("Đọc bị lỗi!\n");
+		perror("Read err!\n");
 	}
 
 	if (nbytes == 0)
 	{
 		return 0;
 	}
-
 	int fileSize = 0;
 	FILE *file, fileStat;
 	file = fopen(buffer, "rb");
-	printf("Ten file Client gui len la:%s\n", buffer);
+
+	if (file == 0)
+	{
+		int message = -1;
+		write(connectSocket, (void *)&message, sizeof(int));
+		return 1;
+	}
+	else
+	{
+		int message = 1;
+		write(connectSocket, (void *)&message, sizeof(int));
+	}
+
+	printf("File name client requests:%s \n ", buffer);
 	//lay kich thuoc file
 	fseek(file, 0L, SEEK_END);
 	fileSize = ftell(file);
 	fseek(file, 0L, SEEK_SET);
-	printf("Kich thuoc cua file: %d \n", fileSize);
+	printf("Size of file: %d \n", fileSize);
 	//gui kich thuoc file
-	write(listenFileDesc, (void *)&fileSize, sizeof(int));
+	write(connectSocket, (void *)&fileSize, sizeof(int));
 	//gui file
 	bzero(buffer, sizeof(buffer));
 	while (!feof(file))
 	{
 		int sizeRead = fread(buffer, 1, sizeof(buffer), file);
-		write(listenFileDesc, buffer, sizeof(buffer));
+		write(connectSocket, buffer, sizeof(buffer));
 		bzero(buffer, sizeof(buffer));
 	}
-	printf("Gui file %s xong!\n", buffer);
+	printf("Sent file done , amount of files have downloaded:%d \n", ++countFile);
 	return 1;
 }
